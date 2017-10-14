@@ -9,6 +9,16 @@ import (
 	"net/http"
 )
 
+const (
+	RETURN_CODE_SUCCESS = "SUCCESS"
+	RETURN_CODE_FAIL    = "FAIL"
+)
+
+const (
+	RESULT_CODE_SUCCESS = "SUCCESS"
+	RESULT_CODE_FAIL    = "FAIL"
+)
+
 // AppTrans is abstact of Transaction handler. With AppTrans, we can get prepay id
 type AppTrans struct {
 	Config *WxConfig
@@ -32,9 +42,9 @@ func NewAppTrans(cfg *WxConfig) (*AppTrans, error) {
 // Submit the order to weixin pay and return the prepay id if success,
 // Prepay id is used for app to start a payment
 // If fail, error is not nil, check error for more information
-func (this *AppTrans) Submit(orderId string, amount float64, desc string, clientIp string) (string, error) {
+func (this *AppTrans) Submit(orderId string, amount float64, desc string, clientIp string, openId string) (string, error) {
 
-	odrInXml := this.signedOrderRequestXmlString(orderId, fmt.Sprintf("%.0f", amount), desc, clientIp)
+	odrInXml := this.signedOrderRequestXmlString(orderId, fmt.Sprintf("%.0f", amount), desc, clientIp, openId)
 	resp, err := doHttpPost(this.Config.PlaceOrderUrl, []byte(odrInXml))
 	if err != nil {
 		return "", err
@@ -45,6 +55,10 @@ func (this *AppTrans) Submit(orderId string, amount float64, desc string, client
 		return "", err
 	}
 
+	if placeOrderResult.ReturnCode != RETURN_CODE_SUCCESS {
+		return "", fmt.Errorf("return code:%s, return desc:%s", placeOrderResult.ReturnCode, placeOrderResult.ReturnMsg)
+	}
+
 	//Verify the sign of response
 	resultInMap := placeOrderResult.ToMap()
 	wantSign := Sign(resultInMap, this.Config.AppKey)
@@ -53,11 +67,7 @@ func (this *AppTrans) Submit(orderId string, amount float64, desc string, client
 		return "", fmt.Errorf("sign not match, want:%s, got:%s", wantSign, gotSign)
 	}
 
-	if placeOrderResult.ReturnCode != "SUCCESS" {
-		return "", fmt.Errorf("return code:%s, return desc:%s", placeOrderResult.ReturnCode, placeOrderResult.ReturnMsg)
-	}
-
-	if placeOrderResult.ResultCode != "SUCCESS" {
+	if placeOrderResult.ResultCode != RESULT_CODE_SUCCESS {
 		return "", fmt.Errorf("resutl code:%s, result desc:%s", placeOrderResult.ErrCode, placeOrderResult.ErrCodeDesc)
 	}
 
@@ -68,7 +78,8 @@ func (this *AppTrans) newQueryXml(transId string) string {
 	param := make(map[string]string)
 	param["appid"] = this.Config.AppId
 	param["mch_id"] = this.Config.MchId
-	param["transaction_id"] = transId
+	//param["transaction_id"] = transId
+	param["out_trade_no"] = transId
 	param["nonce_str"] = NewNonceString()
 
 	sign := Sign(param, this.Config.AppKey)
@@ -78,19 +89,23 @@ func (this *AppTrans) newQueryXml(transId string) string {
 }
 
 // Query the order from weixin pay server by transaction id of weixin pay
-func (this *AppTrans) Query(transId string) (QueryOrderResult, error) {
+func (this *AppTrans) Query(transId string) (*QueryOrderResult, error) {
 	queryOrderResult := QueryOrderResult{}
 
 	queryXml := this.newQueryXml(transId)
-	// fmt.Println(queryXml)
+
 	resp, err := doHttpPost(this.Config.QueryOrderUrl, []byte(queryXml))
 	if err != nil {
-		return queryOrderResult, nil
+		return nil, err
 	}
 
 	queryOrderResult, err = ParseQueryOrderResult(resp)
 	if err != nil {
-		return queryOrderResult, err
+		return nil, err
+	}
+
+	if queryOrderResult.ReturnCode != RETURN_CODE_SUCCESS {
+		return nil, fmt.Errorf("return code:%s, return desc:%s", queryOrderResult.ReturnCode, queryOrderResult.ReturnMsg)
 	}
 
 	//verity sign of response
@@ -98,10 +113,14 @@ func (this *AppTrans) Query(transId string) (QueryOrderResult, error) {
 	wantSign := Sign(resultInMap, this.Config.AppKey)
 	gotSign := resultInMap["sign"]
 	if wantSign != gotSign {
-		return queryOrderResult, fmt.Errorf("sign not match, want:%s, got:%s", wantSign, gotSign)
+		return nil, fmt.Errorf("sign not match, want:%s, got:%s", wantSign, gotSign)
 	}
 
-	return queryOrderResult, nil
+	if queryOrderResult.ResultCode != RESULT_CODE_SUCCESS {
+		return nil, fmt.Errorf("resutl code:%s, result desc:%s", queryOrderResult.ErrCode, queryOrderResult.ErrCodeDesc)
+	}
+
+	return &queryOrderResult, nil
 }
 
 // NewPaymentRequest build the payment request structure for app to start a payment.
@@ -111,29 +130,31 @@ func (this *AppTrans) NewPaymentRequest(prepayId string) PaymentRequest {
 	timestamp := NewTimestampString()
 
 	param := make(map[string]string)
-	param["appid"] = this.Config.AppId
-	param["partnerid"] = this.Config.MchId
-	param["prepayid"] = prepayId
-	param["package"] = "Sign=WXPay"
-	param["noncestr"] = noncestr
-	param["timestamp"] = timestamp
+	param["appId"] = this.Config.AppId
+	//param["partnerid"] = this.Config.MchId
+	//param["prepayid"] = prepayId
+	param["package"] = "prepay_id=" + prepayId
+	param["nonceStr"] = noncestr
+	param["timeStamp"] = timestamp
+	param["signType"] = "MD5"
 
 	sign := Sign(param, this.Config.AppKey)
 
 	payRequest := PaymentRequest{
-		AppId:     this.Config.AppId,
-		PartnerId: this.Config.MchId,
-		PrepayId:  prepayId,
-		Package:   "Sign=WXPay",
-		NonceStr:  noncestr,
-		Timestamp: timestamp,
+		AppId: param["appId"],
+		//PartnerId: this.Config.MchId,
+		//PrepayId:  prepayId,
+		Package:   param["package"],
+		NonceStr:  param["nonceStr"],
+		Timestamp: param["timeStamp"],
+		SignType:  param["signType"],
 		Sign:      sign,
 	}
 
 	return payRequest
 }
 
-func (this *AppTrans) newOrderRequest(orderId, amount, desc, clientIp string) map[string]string {
+func (this *AppTrans) newOrderRequest(orderId, amount, desc, clientIp, openId string) map[string]string {
 	param := make(map[string]string)
 	param["appid"] = this.Config.AppId
 	param["attach"] = "透传字段" //optional
@@ -145,12 +166,16 @@ func (this *AppTrans) newOrderRequest(orderId, amount, desc, clientIp string) ma
 	param["spbill_create_ip"] = clientIp
 	param["total_fee"] = amount
 	param["trade_type"] = this.Config.TradeType
+	// JSAPI需要传openId
+	if openId != "" {
+		param["openid"] = openId
+	}
 
 	return param
 }
 
-func (this *AppTrans) signedOrderRequestXmlString(orderId, amount, desc, clientIp string) string {
-	order := this.newOrderRequest(orderId, amount, desc, clientIp)
+func (this *AppTrans) signedOrderRequestXmlString(orderId, amount, desc, clientIp, openId string) string {
+	order := this.newOrderRequest(orderId, amount, desc, clientIp, openId)
 	sign := Sign(order, this.Config.AppKey)
 	// fmt.Println(sign)
 

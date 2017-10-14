@@ -8,4 +8,5 @@ type PaymentRequest struct {
 	NonceStr  string
 	Timestamp string
 	Sign      string
+	SignType  string
 }
