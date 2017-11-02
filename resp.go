@@ -57,7 +57,8 @@ type QueryOrderResult struct {
 	ErrCode        string   `xml:"err_code"`
 	ErrCodeDesc    string   `xml:"err_code_des"`
 	DeviceInfo     string   `xml:"device_info"`
-	OpenId         string   `xml:"open_id"`
+	//OpenId         string   `xml:"open_id"`
+	OpenId         string   `xml:"openid"`
 	IsSubscribe    string   `xml:"is_subscribe"`
 	TradeType      string   `xml:"trade_type"`
 	TradeState     string   `xml:"trade_state"`
