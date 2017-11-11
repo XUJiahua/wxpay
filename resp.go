@@ -21,6 +21,9 @@ type PlaceOrderResult struct {
 	TradeType   string   `xml:"trade_type"`
 	PrepayId    string   `xml:"prepay_id"`
 	CodeUrl     string   `xml:"code_url"`
+	OutRefundNo string   `xml:"out_refund_no"`
+	RefundId    string   `xml:"refund_id"`
+	RefundFee   string   `xml:"refund_fee"`
 }
 
 func (this *PlaceOrderResult) ToMap() map[string]string {
@@ -57,7 +60,6 @@ type QueryOrderResult struct {
 	ErrCode        string   `xml:"err_code"`
 	ErrCodeDesc    string   `xml:"err_code_des"`
 	DeviceInfo     string   `xml:"device_info"`
-	//OpenId         string   `xml:"open_id"`
 	OpenId         string   `xml:"openid"`
 	IsSubscribe    string   `xml:"is_subscribe"`
 	TradeType      string   `xml:"trade_type"`
@@ -72,6 +74,9 @@ type QueryOrderResult struct {
 	CouponCount    string   `xml:"coupon_count"`
 	TransactionId  string   `xml:"transaction_id"`
 	OrderId        string   `xml:"out_trade_no"`
+	OutRefundNo    string   `xml:"out_refund_no"`
+	RefundId       string   `xml:"refund_id"`
+	RefundFee      string   `xml:"refund_fee"`
 	Attach         string   `xml:"attach"`
 	TimeEnd        string   `xml:"time_end"`
 }
