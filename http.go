@@ -104,8 +104,8 @@ func (this *AppTrans) Close(orderId string) error {
 }
 
 // Refund
-func (this *AppTrans) Refund(orderId string, amount float64, refundOrderId string, refundAmount float64) error {
-	odrInXml := this.signedRefundOrderRequestXmlString(orderId, fmt.Sprintf("%.0f", amount), refundOrderId, fmt.Sprintf("%.0f", refundAmount))
+func (this *AppTrans) Refund(orderId string, amount int64, refundOrderId string, refundAmount int64) error {
+	odrInXml := this.signedRefundOrderRequestXmlString(orderId, fmt.Sprintf("%d", amount), refundOrderId, fmt.Sprintf("%d", refundAmount))
 	tlsConfig, err := this.getTLSConfig()
 	if err != nil {
 		return err
@@ -143,9 +143,9 @@ func (this *AppTrans) Refund(orderId string, amount float64, refundOrderId strin
 // Submit the order to weixin pay and return the prepay id if success,
 // Prepay id is used for app to start a payment
 // If fail, error is not nil, check error for more information
-func (this *AppTrans) Submit(orderId string, amount float64, desc string, clientIp string, openId string) (string, error) {
+func (this *AppTrans) Submit(orderId string, amount int64, desc string, clientIp string, openId string) (string, error) {
 
-	odrInXml := this.signedOrderRequestXmlString(orderId, fmt.Sprintf("%.0f", amount), desc, clientIp, openId)
+	odrInXml := this.signedOrderRequestXmlString(orderId, fmt.Sprintf("%d", amount), desc, clientIp, openId)
 	resp, err := doHttpPost(this.Config.PlaceOrderUrl, []byte(odrInXml))
 	if err != nil {
 		return "", err
